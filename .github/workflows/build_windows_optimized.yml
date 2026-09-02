@@ -95,6 +95,9 @@ jobs:
             echo "Qt: 5.15.6 static Win32"
             echo "Place this directory directly inside the Pegasus G directory."
             echo "Keep Pegasus_latest.exe unchanged for rollback."
+            echo "Settings: %LOCALAPPDATA%\\pegasus-frontend\\settings.txt"
+            echo "Borderless mode: general.window-mode: borderless"
+            echo "This build does not change the Windows HDR setting."
           } > "${package_dir}/BUILD.txt"
 
           zip_name="Pegasus-optimized-win32-${GITHUB_SHA:0:8}.zip"

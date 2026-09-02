@@ -114,8 +114,12 @@ void Settings::setWindowMode(const int new_val)
         return;
     }
 
-    if (new_val == windowMode())
+    if (new_val == windowMode()) {
+        // Persist the explicit mode when migrating a config that only has the
+        // legacy fullscreen boolean.
+        AppSettings::save_config();
         return;
+    }
 
     const bool fullscreen = new_mode != WindowMode::Windowed;
     const bool fullscreen_windowed = new_mode == WindowMode::Windowed

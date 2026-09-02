@@ -37,6 +37,7 @@ enum class ConfigEntryCategory : unsigned char {
 enum class ConfigEntryGeneralOption : unsigned char {
     FULLSCREEN,
     FULLSCREEN_WINDOWED,
+    WINDOW_MODE,
     MOUSE_SUPPORT,
     VERIFY_FILES,
     LOCALE,
@@ -74,6 +75,7 @@ private:
     void log_error(const size_t lineno, const QString& msg) const;
     void log_unknown_key(const size_t lineno, const QString& key) const;
     void log_needs_bool(const size_t lineno, const QString& key) const;
+    void log_needs_window_mode(const size_t lineno, const QString& key) const;
 
 private:
     void handle_entry(const size_t lineno, const QString& key, const std::vector<QString>& vals) const;

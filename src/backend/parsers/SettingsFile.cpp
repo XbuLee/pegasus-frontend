@@ -54,6 +54,41 @@ bool store_bool_maybe(const QString& str, bool& target)
     return success;
 }
 
+bool store_window_mode_maybe(const QString& str)
+{
+    const QString mode = str.trimmed().toLower();
+    if (mode == QLatin1String("windowed")) {
+        AppSettings::general.fullscreen = false;
+        return true;
+    }
+    if (mode == QLatin1String("borderless")
+        || mode == QLatin1String("borderless-fullscreen"))
+    {
+        AppSettings::general.fullscreen = true;
+        AppSettings::general.fullscreen_windowed = true;
+        return true;
+    }
+    if (mode == QLatin1String("native-fullscreen")
+        || mode == QLatin1String("fullscreen"))
+    {
+        AppSettings::general.fullscreen = true;
+        AppSettings::general.fullscreen_windowed = false;
+        return true;
+    }
+
+    return false;
+}
+
+QString window_mode_string()
+{
+    if (!AppSettings::general.fullscreen)
+        return QStringLiteral("windowed");
+
+    return AppSettings::general.fullscreen_windowed
+        ? QStringLiteral("borderless")
+        : QStringLiteral("native-fullscreen");
+}
+
 } // namespace
 
 
@@ -68,6 +103,7 @@ ConfigEntryMaps::ConfigEntryMaps()
     , str_to_general_opt {
         { QStringLiteral("fullscreen"), GeneralOption::FULLSCREEN },
         { QStringLiteral("fullscreen-windowed"), GeneralOption::FULLSCREEN_WINDOWED },
+        { QStringLiteral("window-mode"), GeneralOption::WINDOW_MODE },
         { QStringLiteral("input-mouse-support"), GeneralOption::MOUSE_SUPPORT },
         { QStringLiteral("verify-files"), GeneralOption::VERIFY_FILES },
         { QStringLiteral("locale"), GeneralOption::LOCALE },
@@ -124,6 +160,11 @@ void LoadContext::log_needs_bool(const size_t lineno, const QString& key) const
     log_error(lineno, LOGMSG("this option (`%1`) must be a boolean (true/false) value").arg(key));
 }
 
+void LoadContext::log_needs_window_mode(const size_t lineno, const QString& key) const
+{
+    log_error(lineno, LOGMSG("this option (`%1`) must be windowed, borderless, or native-fullscreen").arg(key));
+}
+
 void LoadContext::handle_entry(const size_t lineno,
                                const QString& key,
                                const std::vector<QString>& vals) const
@@ -171,6 +212,10 @@ void LoadContext::handle_general_attrib(const size_t lineno, const QString& key,
         case ConfigEntryGeneralOption::FULLSCREEN_WINDOWED:
             if (!store_bool_maybe(val, AppSettings::general.fullscreen_windowed))
                 log_needs_bool(lineno, key);
+            break;
+        case ConfigEntryGeneralOption::WINDOW_MODE:
+            if (!store_window_mode_maybe(val))
+                log_needs_window_mode(lineno, key);
             break;
         case ConfigEntryGeneralOption::MOUSE_SUPPORT:
             if (!store_bool_maybe(val, AppSettings::general.mouse_support))
@@ -291,7 +336,7 @@ void SaveContext::save() const
     print_providers(stream);
     print_keys(stream);
 
-    Log::info(LOGMSG("Program settings saved"));
+    Log::info(LOGMSG("Program settings saved (`%1`)").arg(config_path));
 }
 
 void SaveContext::print_general(QTextStream& stream) const
@@ -326,6 +371,12 @@ void SaveContext::print_general(QTextStream& stream) const
             option_names.at(entry.first),
             entry.second);
     }
+
+    // Keep this after the legacy fullscreen keys so it is authoritative on load.
+    stream << LINE_TEMPLATE.arg(
+        category_names.at(ConfigEntryCategory::GENERAL),
+        option_names.at(GeneralOption::WINDOW_MODE),
+        window_mode_string());
 }
 
 void SaveContext::print_providers(QTextStream& stream) const
