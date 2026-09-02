@@ -22,14 +22,26 @@ import QtQuick.Window 2.2
 
 Window {
     id: appWindow
+
+    readonly property int windowMode: Internal.settings.windowMode
+    readonly property bool borderlessFullscreen: windowMode === 1
+
     visible: true
-    width: 1280
-    height: 720
+    x: borderlessFullscreen
+       ? Screen.virtualX
+       : Screen.virtualX + Math.max(0, Math.round((Screen.width - 1280) / 2))
+    y: borderlessFullscreen
+       ? Screen.virtualY
+       : Screen.virtualY + Math.max(0, Math.round((Screen.height - 720) / 2))
+    width: borderlessFullscreen ? Screen.width : 1280
+    height: borderlessFullscreen ? Screen.height : 720
     title: "Pegasus"
     color: "#000"
+    flags: borderlessFullscreen
+           ? Qt.Window | Qt.FramelessWindowHint
+           : Qt.Window
 
-    visibility: Internal.settings.fullscreen
-                ? Window.FullScreen : Window.AutomaticVisibility
+    visibility: windowMode === 2 ? Window.FullScreen : Window.Windowed
 
     onClosing: {
         theme.source = "";

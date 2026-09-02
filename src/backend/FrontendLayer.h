@@ -67,6 +67,8 @@ private:
 
     void suspendMedia();
     void restoreMedia();
+    void updateMediaForApplicationFocus();
     void snapshotWindows();
     void restoreWindows();
+    void requestWindowActivation(QWindow*);
 };

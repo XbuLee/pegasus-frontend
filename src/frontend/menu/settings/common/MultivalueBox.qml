@@ -23,6 +23,7 @@ FocusScope {
 
     property alias model: list.model
     property alias index: list.currentIndex
+    property bool translateNames: false
 
     readonly property int textSize: vpx(22)
     readonly property int itemHeight: 2.25 * textSize
@@ -150,7 +151,7 @@ FocusScope {
                 anchors.rightMargin: vpx(24)
                 anchors.verticalCenter: parent.verticalCenter
 
-                text: model.name
+                text: root.translateNames ? qsTr(model.name) + api.tr : model.name
                 color: "#444"
                 font.pixelSize: root.textSize
                 font.family: globalFonts.sans

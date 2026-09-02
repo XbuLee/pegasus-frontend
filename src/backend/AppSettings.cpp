@@ -149,6 +149,11 @@ General::General()
     , DEFAULT_THEME(QStringLiteral(":/themes/pegasus-theme-grid/"))
     , portable(false)
     , fullscreen(true)
+#ifdef Q_OS_WINDOWS
+    , fullscreen_windowed(true)
+#else
+    , fullscreen_windowed(false)
+#endif
     , mouse_support(true)
     , verify_files(true)
     , locale() // intentionally blank

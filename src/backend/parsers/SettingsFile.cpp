@@ -67,6 +67,7 @@ ConfigEntryMaps::ConfigEntryMaps()
     }
     , str_to_general_opt {
         { QStringLiteral("fullscreen"), GeneralOption::FULLSCREEN },
+        { QStringLiteral("fullscreen-windowed"), GeneralOption::FULLSCREEN_WINDOWED },
         { QStringLiteral("input-mouse-support"), GeneralOption::MOUSE_SUPPORT },
         { QStringLiteral("verify-files"), GeneralOption::VERIFY_FILES },
         { QStringLiteral("locale"), GeneralOption::LOCALE },
@@ -165,6 +166,10 @@ void LoadContext::handle_general_attrib(const size_t lineno, const QString& key,
     switch (option_it->second) {
         case ConfigEntryGeneralOption::FULLSCREEN:
             if (!store_bool_maybe(val, AppSettings::general.fullscreen))
+                log_needs_bool(lineno, key);
+            break;
+        case ConfigEntryGeneralOption::FULLSCREEN_WINDOWED:
+            if (!store_bool_maybe(val, AppSettings::general.fullscreen_windowed))
                 log_needs_bool(lineno, key);
             break;
         case ConfigEntryGeneralOption::MOUSE_SUPPORT:
@@ -305,6 +310,7 @@ void SaveContext::print_general(QTextStream& stream) const
 
     GeneralStrMap option_values {
         { GeneralOption::FULLSCREEN, AppSettings::general.fullscreen ? STR_TRUE : STR_FALSE },
+        { GeneralOption::FULLSCREEN_WINDOWED, AppSettings::general.fullscreen_windowed ? STR_TRUE : STR_FALSE },
         { GeneralOption::MOUSE_SUPPORT, AppSettings::general.mouse_support ? STR_TRUE : STR_FALSE },
         { GeneralOption::VERIFY_FILES, AppSettings::general.verify_files ? STR_TRUE : STR_FALSE },
         { GeneralOption::LOCALE, AppSettings::general.locale },

@@ -33,6 +33,13 @@ FocusScope {
     signal openProviderSettings
     signal reloadRequested
 
+    ListModel {
+        id: windowModeModel
+        ListElement { name: QT_TR_NOOP("Windowed") }
+        ListElement { name: QT_TR_NOOP("Borderless fullscreen") }
+        ListElement { name: QT_TR_NOOP("Native fullscreen") }
+    }
+
     width: parent.width
     height: parent.height
     visible: 0 < (x + width) && x < Window.window.width
@@ -81,11 +88,10 @@ FocusScope {
             section: "general"
         },
         SettingsEntry {
-            label: QT_TR_NOOP("Fullscreen mode")
-            desc: QT_TR_NOOP("On some platforms this setting may have no effect.")
-            type: SettingsEntry.Type.Bool
-            boolValue: Internal.settings.fullscreen
-            boolSetter: (val) => Internal.settings.fullscreen = val
+            label: QT_TR_NOOP("Display mode")
+            type: SettingsEntry.Type.Select
+            selectBox: windowModeBox
+            selectValue: qsTr(windowModeModel.get(Internal.settings.windowMode).name) + api.tr
             section: "general"
         },
 
@@ -237,5 +243,16 @@ FocusScope {
 
         onClose: options.focus = true
         onSelect: Internal.settings.themes.currentIndex = index
+    }
+    MultivalueBox {
+        id: windowModeBox
+        z: 3
+
+        model: windowModeModel
+        index: Internal.settings.windowMode
+        translateNames: true
+
+        onClose: options.focus = true
+        onSelect: Internal.settings.windowMode = index
     }
 }

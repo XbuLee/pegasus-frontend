@@ -36,6 +36,9 @@ class Settings : public QObject {
     Q_PROPERTY(bool fullscreen
                READ fullscreen WRITE setFullscreen
                NOTIFY fullscreenChanged)
+    Q_PROPERTY(int windowMode
+               READ windowMode WRITE setWindowMode
+               NOTIFY windowModeChanged)
     Q_PROPERTY(bool mouseSupport
                READ mouseSupport WRITE setMouseSupport
                NOTIFY mouseSupportChanged)
@@ -54,8 +57,18 @@ public:
     explicit Settings(QObject* parent = nullptr);
     void postInit();
 
+    enum class WindowMode {
+        Windowed = 0,
+        BorderlessFullscreen,
+        NativeFullscreen,
+    };
+    Q_ENUM(WindowMode)
+
     bool fullscreen() const { return AppSettings::general.fullscreen; }
     void setFullscreen(bool);
+
+    int windowMode() const;
+    void setWindowMode(int);
 
     bool mouseSupport() const { return AppSettings::general.mouse_support; }
     void setMouseSupport(bool);
@@ -74,6 +87,7 @@ public:
 
 signals:
     void fullscreenChanged();
+    void windowModeChanged();
     void mouseSupportChanged();
     void verifyFilesChanged();
     void gameDirsChanged();

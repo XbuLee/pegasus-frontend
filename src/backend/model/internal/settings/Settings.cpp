@@ -85,10 +85,51 @@ void Settings::setFullscreen(bool new_val)
     if (new_val == AppSettings::general.fullscreen)
         return;
 
+    const int old_window_mode = windowMode();
     AppSettings::general.fullscreen = new_val;
     AppSettings::save_config();
 
     emit fullscreenChanged();
+    if (old_window_mode != windowMode())
+        emit windowModeChanged();
+}
+
+int Settings::windowMode() const
+{
+    if (!AppSettings::general.fullscreen)
+        return static_cast<int>(WindowMode::Windowed);
+
+    return static_cast<int>(AppSettings::general.fullscreen_windowed
+        ? WindowMode::BorderlessFullscreen
+        : WindowMode::NativeFullscreen);
+}
+
+void Settings::setWindowMode(const int new_val)
+{
+    const auto new_mode = static_cast<WindowMode>(new_val);
+    if (new_mode != WindowMode::Windowed
+        && new_mode != WindowMode::BorderlessFullscreen
+        && new_mode != WindowMode::NativeFullscreen)
+    {
+        return;
+    }
+
+    if (new_val == windowMode())
+        return;
+
+    const bool fullscreen = new_mode != WindowMode::Windowed;
+    const bool fullscreen_windowed = new_mode == WindowMode::Windowed
+        ? AppSettings::general.fullscreen_windowed
+        : new_mode == WindowMode::BorderlessFullscreen;
+    const bool fullscreen_changed = fullscreen != AppSettings::general.fullscreen;
+
+    AppSettings::general.fullscreen = fullscreen;
+    AppSettings::general.fullscreen_windowed = fullscreen_windowed;
+    AppSettings::save_config();
+
+    if (fullscreen_changed)
+        emit fullscreenChanged();
+    emit windowModeChanged();
 }
 
 void Settings::setMouseSupport(bool new_val)

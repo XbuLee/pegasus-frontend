@@ -32,9 +32,21 @@
 #include <QQuickWindow>
 #include <QGuiApplication>
 #include <QMetaProperty>
+#include <QTimer>
 #include <QWindow>
 
 #include <algorithm>
+#include <array>
+
+#ifdef Q_OS_WINDOWS
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 
 namespace {
@@ -54,6 +66,38 @@ bool has_method(const QObject* const object, const char* const signature)
     return object->metaObject()->indexOfMethod(signature) >= 0;
 }
 
+void activate_window(QWindow* const window)
+{
+    window->raise();
+    window->requestActivate();
+
+#ifdef Q_OS_WINDOWS
+    const HWND handle = reinterpret_cast<HWND>(window->winId());
+    if (!handle)
+        return;
+
+    if (IsIconic(handle))
+        ShowWindow(handle, SW_RESTORE);
+
+    const HWND foreground_window = GetForegroundWindow();
+    const DWORD current_thread = GetCurrentThreadId();
+    const DWORD foreground_thread = foreground_window
+        ? GetWindowThreadProcessId(foreground_window, nullptr)
+        : 0;
+    const bool input_attached = foreground_thread
+        && foreground_thread != current_thread
+        && AttachThreadInput(current_thread, foreground_thread, TRUE);
+
+    BringWindowToTop(handle);
+    SetForegroundWindow(handle);
+    SetActiveWindow(handle);
+    SetFocus(handle);
+
+    if (input_attached)
+        AttachThreadInput(current_thread, foreground_thread, FALSE);
+#endif
+}
+
 } // namespace
 
 
@@ -66,6 +110,10 @@ FrontendLayer::FrontendLayer(QObject* const api_public, QObject* const api_priva
     , m_windows_hidden(false)
 {
     // Note: the pointer to the Api is non-owning and constant during the runtime
+    QObject::connect(qGuiApp, &QGuiApplication::applicationStateChanged,
+                     this, [this](Qt::ApplicationState){ updateMediaForApplicationFocus(); });
+    QObject::connect(qGuiApp, &QGuiApplication::focusWindowChanged,
+                     this, [this](QWindow*){ updateMediaForApplicationFocus(); });
 }
 
 void FrontendLayer::rebuild()
@@ -86,6 +134,7 @@ void FrontendLayer::rebuild()
     m_engine->rootContext()->setContextProperty(QStringLiteral("Api"), m_api_public);
     m_engine->rootContext()->setContextProperty(QStringLiteral("Internal"), m_api_private);
     m_engine->load(QUrl(QStringLiteral("qrc:/frontend/main.qml")));
+    updateMediaForApplicationFocus();
 
     emit rebuildComplete();
 }
@@ -122,10 +171,9 @@ void FrontendLayer::resumeFromGame()
     if (!m_suspended)
         return;
 
-    restoreWindows();
-    restoreMedia();
-
     m_suspended = false;
+    restoreWindows();
+    updateMediaForApplicationFocus();
     Log::info(LOGMSG("Frontend resumed after external game"));
 }
 
@@ -213,6 +261,20 @@ void FrontendLayer::restoreMedia()
     m_media_states.clear();
 }
 
+void FrontendLayer::updateMediaForApplicationFocus()
+{
+    if (!m_engine)
+        return;
+
+    const bool frontend_focused =
+        QGuiApplication::applicationState() == Qt::ApplicationActive
+        && QGuiApplication::focusWindow();
+    if (frontend_focused && !m_suspended)
+        restoreMedia();
+    else
+        suspendMedia();
+}
+
 void FrontendLayer::snapshotWindows()
 {
     Q_ASSERT(m_window_states.isEmpty());
@@ -254,9 +316,28 @@ void FrontendLayer::restoreWindows()
     m_window_states.clear();
     m_windows_hidden = false;
 
-    if (activation_target) {
-        activation_target->raise();
-        activation_target->requestActivate();
+    if (activation_target)
+        requestWindowActivation(activation_target);
+}
+
+void FrontendLayer::requestWindowActivation(QWindow* const window)
+{
+    static constexpr std::array<int, 3> ACTIVATION_DELAYS_MS {{ 0, 80, 240 }};
+
+    const QPointer<QWindow> guarded_window(window);
+    for (const int delay_ms : ACTIVATION_DELAYS_MS) {
+        QTimer::singleShot(delay_ms, this, [this, guarded_window](){
+            if (m_suspended || !guarded_window)
+                return;
+
+            if (QGuiApplication::applicationState() == Qt::ApplicationActive
+                && QGuiApplication::focusWindow() == guarded_window.data())
+            {
+                return;
+            }
+
+            activate_window(guarded_window.data());
+        });
     }
 }
 

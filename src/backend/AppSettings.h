@@ -40,6 +40,7 @@ struct General {
 
     bool portable;
     bool fullscreen;
+    bool fullscreen_windowed;
     bool mouse_support;
     bool verify_files;
     QString locale;
