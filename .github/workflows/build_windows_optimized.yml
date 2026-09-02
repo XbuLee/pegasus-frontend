@@ -16,6 +16,7 @@ concurrency:
 env:
   TOOLS_URL: https://github.com/mmatyas/pegasus-frontend/releases/download/alpha1
   QT_NAME: qt5156_win32-mingw-static
+  OPENSSL_NAME: openssl-111q_mingw
   SDL_VERSION: "2.0.20"
 
 jobs:
@@ -38,11 +39,13 @@ jobs:
           sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
           sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
 
-      - name: Download Qt and SDL
+      - name: Download Qt, OpenSSL and SDL
         shell: bash
         run: |
           set -o errexit -o nounset -o pipefail
           curl --fail --location --retry 3 "${TOOLS_URL}/${QT_NAME}.tar.xz" \
+            | sudo tar xJf - -C /opt/
+          curl --fail --location --retry 3 "${TOOLS_URL}/${OPENSSL_NAME}.tar.xz" \
             | sudo tar xJf - -C /opt/
           curl --fail --location --retry 3 "${TOOLS_URL}/SDL2-${SDL_VERSION}_mingw.tar.xz" \
             | sudo tar xJf - -C /opt/
