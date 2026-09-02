@@ -16,8 +16,13 @@
 
 
 #include <QtTest/QtTest>
+#include <QProcessEnvironment>
 
+#include "Log.h"
+#include "Paths.h"
 #include "ProcessLauncher.h"
+#include "model/gaming/Game.h"
+#include "model/gaming/GameFile.h"
 
 
 namespace {
@@ -35,12 +40,29 @@ class test_ProcessLauncher : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
+    void cleanupTestCase();
+
     void exe_path();
     void exe_path_data();
 
     void workdir_path();
     void workdir_path_data();
+
+    void process_lifecycle();
+    void process_launch_failure();
+    void appdir_fallback();
 };
+
+void test_ProcessLauncher::initTestCase()
+{
+    Log::init_qttest();
+}
+
+void test_ProcessLauncher::cleanupTestCase()
+{
+    Log::close();
+}
 
 void test_ProcessLauncher::exe_path()
 {
@@ -103,6 +125,84 @@ void test_ProcessLauncher::workdir_path_data()
     QTest::newRow("relative") << "./subdir" << "/some/path" << "/some/path/subdir";
     QTest::newRow("relative, no basedir") << "./subdir" << QString() << (app_path + "/subdir");
     QTest::newRow("absolute") << "/subdir" << "dummy" << "/subdir";
+#endif
+}
+
+void test_ProcessLauncher::process_lifecycle()
+{
+    model::Game game("test");
+#ifdef Q_OS_WIN
+    game.setLaunchCmd(QStringLiteral("cmd /q /c exit 0"));
+#else
+    game.setLaunchCmd(QStringLiteral("/bin/sh -c \"exit 0\""));
+#endif
+    const QDir temp_dir(QDir::tempPath());
+    model::GameFile gamefile(temp_dir.filePath(QStringLiteral("pegasus-test.rom")), game);
+
+    ProcessLauncher launcher;
+    QSignalSpy started(&launcher, &ProcessLauncher::processLaunchOk);
+    QSignalSpy failed(&launcher, &ProcessLauncher::processLaunchError);
+    QSignalSpy finished(&launcher, &ProcessLauncher::processFinished);
+
+    launcher.onLaunchRequested(&gamefile);
+
+    QTRY_COMPARE(started.count(), 1);
+    QTRY_COMPARE(finished.count(), 1);
+    QCOMPARE(failed.count(), 0);
+}
+
+void test_ProcessLauncher::process_launch_failure()
+{
+    const QDir temp_dir(QDir::tempPath());
+    const QString missing_executable = temp_dir.filePath(
+        QStringLiteral("pegasus-executable-that-does-not-exist"));
+    model::Game game("test");
+    game.setLaunchCmd(missing_executable);
+    model::GameFile gamefile(temp_dir.filePath(QStringLiteral("pegasus-test.rom")), game);
+
+    ProcessLauncher launcher;
+    QSignalSpy started(&launcher, &ProcessLauncher::processLaunchOk);
+    QSignalSpy failed(&launcher, &ProcessLauncher::processLaunchError);
+    QSignalSpy finished(&launcher, &ProcessLauncher::processFinished);
+
+    launcher.onLaunchRequested(&gamefile);
+
+    QTRY_COMPARE(failed.count(), 1);
+    QTest::qWait(50);
+    QCOMPARE(started.count(), 0);
+    QCOMPARE(finished.count(), 0);
+}
+
+void test_ProcessLauncher::appdir_fallback()
+{
+#ifdef Q_OS_WIN
+    const bool appdir_was_set = qEnvironmentVariableIsSet("APPDIR");
+    const QByteArray original_appdir = qgetenv("APPDIR");
+
+    qputenv("APPDIR", QByteArrayLiteral("C:\\external\\pegasus"));
+    QCOMPARE(paths::ensure_appdir_env(), QString());
+    QCOMPARE(qgetenv("APPDIR"), QByteArrayLiteral("C:\\external\\pegasus"));
+    QCOMPARE(
+        QProcessEnvironment::systemEnvironment().value(QStringLiteral("appdir")),
+        QStringLiteral("C:\\external\\pegasus"));
+
+    qunsetenv("APPDIR");
+    const QString fallback = paths::ensure_appdir_env();
+    QVERIFY(!fallback.isEmpty());
+    QCOMPARE(
+        QDir::fromNativeSeparators(QString::fromLocal8Bit(qgetenv("APPDIR"))),
+        QDir::fromNativeSeparators(fallback));
+    QCOMPARE(
+        QDir::fromNativeSeparators(
+            QProcessEnvironment::systemEnvironment().value(QStringLiteral("appdir"))),
+        QDir::fromNativeSeparators(fallback));
+
+    if (appdir_was_set)
+        qputenv("APPDIR", original_appdir);
+    else
+        qunsetenv("APPDIR");
+#else
+    QSKIP("APPDIR fallback is Windows-specific");
 #endif
 }
 

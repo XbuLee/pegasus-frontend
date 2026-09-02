@@ -25,11 +25,21 @@ namespace model {
 ApiObject::ApiObject(const backend::CliArgs&, QObject* parent)
     : QObject(parent)
     , m_launch_game_file(nullptr)
+    , m_game_running(false)
     , m_collections(new CollectionListModel(this))
     , m_all_games(new GameListModel(this))
 {
     connect(&m_memory, &model::Memory::dataChanged,
             this, &ApiObject::memoryChanged);
+}
+
+void ApiObject::setGameRunning(const bool running)
+{
+    if (m_game_running == running)
+        return;
+
+    m_game_running = running;
+    emit gameRunningChanged();
 }
 
 void ApiObject::clearGameData()

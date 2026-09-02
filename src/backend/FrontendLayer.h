@@ -18,19 +18,15 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
+#include <QVariant>
+#include <QVector>
 
 class QQmlApplicationEngine;
+class QWindow;
 
 
-/// Manages the dynamic reload of the frontend layer
-///
-/// When we launch a game, the frontend stack will be teared down to save
-/// resources. However, this happens asyncronously (see QObject destructor).
-/// When it's done, the relevant signal will be triggered. After the actual
-/// execution is finished, the frontend layer can be rebuilt again.
-///
-/// Some funtions require a pointer to the API object, to connect and make
-/// it accessible to the frontend.
+/// Owns the QML frontend and suspends it while external games are running.
 class FrontendLayer : public QObject {
     Q_OBJECT
 
@@ -38,16 +34,39 @@ public:
     explicit FrontendLayer(QObject* const api_public, QObject* const api_private, QObject* parent = nullptr);
 
     void rebuild();
-    void teardown();
+    void suspendForGame();
+    void hideForGame();
+    void resumeFromGame();
 
     void clearCache();
 
 signals:
     void rebuildComplete();
-    void teardownComplete();
 
 private:
+    struct MediaState {
+        QPointer<QObject> object;
+        QVariant muted;
+        bool restore_muted = false;
+        bool resume_playback = false;
+    };
+
+    struct WindowState {
+        QPointer<QWindow> window;
+        int visibility = 0;
+        bool was_active = false;
+    };
+
     QObject* const m_api_public;
     QObject* const m_api_private;
     QQmlApplicationEngine* m_engine;
+    QVector<MediaState> m_media_states;
+    QVector<WindowState> m_window_states;
+    bool m_suspended;
+    bool m_windows_hidden;
+
+    void suspendMedia();
+    void restoreMedia();
+    void snapshotWindows();
+    void restoreWindows();
 };

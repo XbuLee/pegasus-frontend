@@ -30,6 +30,10 @@ QString homePath();
 /// Returns the directory that contains the Pegasus executable/app bundle.
 QString app_dir_path();
 
+/// Defines APPDIR when missing and returns the selected package root.
+/// Returns an empty string when an external value was preserved.
+QString ensure_appdir_env();
+
 /// Returns the directory paths where config files may be located
 const QStringList& configDirs();
 

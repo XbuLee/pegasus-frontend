@@ -24,7 +24,29 @@ class test_Api : public QObject {
     Q_OBJECT
 
 private slots:
+    void gameRunning();
 };
+
+void test_Api::gameRunning()
+{
+    const backend::CliArgs args;
+    model::ApiObject api(args);
+    QSignalSpy changed(&api, &model::ApiObject::gameRunningChanged);
+
+    QCOMPARE(api.gameRunning(), false);
+    QCOMPARE(api.property("gameRunning").toBool(), false);
+
+    api.setGameRunning(true);
+    QCOMPARE(api.gameRunning(), true);
+    QCOMPARE(changed.count(), 1);
+
+    api.setGameRunning(true);
+    QCOMPARE(changed.count(), 1);
+
+    api.setGameRunning(false);
+    QCOMPARE(api.gameRunning(), false);
+    QCOMPARE(changed.count(), 2);
+}
 
 
 QTEST_MAIN(test_Api)

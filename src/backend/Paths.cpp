@@ -72,6 +72,29 @@ QString get_cache_dir()
     return dir_path;
 }
 
+#ifdef Q_OS_WIN
+bool looks_like_package_root(const QDir& dir)
+{
+    return QFileInfo(dir.filePath(QStringLiteral("config/game_dirs.txt"))).isFile()
+        || QFileInfo(dir.filePath(QStringLiteral("RetroArch"))).isDir()
+        || QFileInfo(dir.filePath(QStringLiteral("Emulators"))).isDir()
+        || QFileInfo(dir.filePath(QStringLiteral("Roms"))).isDir();
+}
+
+QString find_package_root()
+{
+    QDir executable_dir(paths::app_dir_path());
+    if (looks_like_package_root(executable_dir))
+        return executable_dir.absolutePath();
+
+    QDir parent_dir(executable_dir);
+    if (parent_dir.cdUp() && looks_like_package_root(parent_dir))
+        return parent_dir.absolutePath();
+
+    return executable_dir.absolutePath();
+}
+#endif
+
 } // namespace
 
 
@@ -107,6 +130,23 @@ QString app_dir_path()
 
 #else
     return QCoreApplication::applicationDirPath();
+#endif
+}
+
+QString ensure_appdir_env()
+{
+#ifdef Q_OS_WIN
+    const auto env = QProcessEnvironment::systemEnvironment();
+    if (!env.value(QStringLiteral("APPDIR")).isEmpty())
+        return QString();
+
+    const QString package_root = find_package_root();
+    const bool success = qputenv(
+        "APPDIR",
+        QDir::toNativeSeparators(package_root).toLocal8Bit());
+    return success ? package_root : QString();
+#else
+    return QString();
 #endif
 }
 

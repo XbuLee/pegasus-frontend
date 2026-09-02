@@ -42,6 +42,7 @@ class ApiObject : public QObject {
     QML_READONLY_PROPERTY(model::Memory, memory)
     Q_PROPERTY(ObjectListModel* collections READ collections CONSTANT)
     Q_PROPERTY(ObjectListModel* allGames READ allGames CONSTANT)
+    Q_PROPERTY(bool gameRunning READ gameRunning NOTIFY gameRunningChanged)
 
     // retranslate on locale change
     Q_PROPERTY(QString tr READ emptyString NOTIFY retranslationRequested)
@@ -55,6 +56,8 @@ public:
 
     CollectionListModel* collections() const { return m_collections; }
     GameListModel* allGames() const { return m_all_games; }
+    bool gameRunning() const { return m_game_running; }
+    void setGameRunning(bool);
 
 signals:
     // loading
@@ -66,6 +69,7 @@ signals:
     void gameFileFinished(model::GameFile* const);
     void gameFileLaunched(model::GameFile* const);
     void favoritesChanged();
+    void gameRunningChanged();
     void memoryChanged();
 
     // triggers translation update
@@ -94,6 +98,7 @@ private slots:
 private:
     // game launching
     model::GameFile* m_launch_game_file;
+    bool m_game_running;
 
     // used to trigger re-rendering of texts on locale change
     QString emptyString() const { return QString(); }

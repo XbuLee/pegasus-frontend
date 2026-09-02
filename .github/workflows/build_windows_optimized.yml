@@ -1,0 +1,102 @@
+name: Build - Windows optimized
+
+on:
+  push:
+    branches:
+      - lwj/windows-resident-frontend
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-optimized-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TOOLS_URL: https://github.com/mmatyas/pegasus-frontend/releases/download/alpha1
+  QT_NAME: qt5156_win32-mingw-static
+  SDL_VERSION: "2.0.20"
+
+jobs:
+  build:
+    name: Qt 5.15.6 static Win32
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install MinGW tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes g++-mingw-w64-i686-posix make xz-utils zip
+          sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
+          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+
+      - name: Download Qt and SDL
+        shell: bash
+        run: |
+          set -o errexit -o nounset -o pipefail
+          curl --fail --location --retry 3 "${TOOLS_URL}/${QT_NAME}.tar.xz" \
+            | sudo tar xJf - -C /opt/
+          curl --fail --location --retry 3 "${TOOLS_URL}/SDL2-${SDL_VERSION}_mingw.tar.xz" \
+            | sudo tar xJf - -C /opt/
+          curl --fail --location --retry 3 "${TOOLS_URL}/apng_patched_headers.tar.xz" \
+            | sudo tar xJf - -C "/opt/${QT_NAME}/include/"
+
+      - name: Configure
+        shell: bash
+        run: |
+          "/opt/${QT_NAME}/bin/qmake" . \
+            ENABLE_APNG=1 \
+            USE_SDL_GAMEPAD=1 \
+            USE_SDL_POWER=1 \
+            "SDL_LIBS=-L/opt/SDL2-${SDL_VERSION}/lib -lSDL2 -Wl,--no-undefined -lm -ldinput8 -ldxguid -ldxerr8 -lsetupapi" \
+            "SDL_INCLUDES=/opt/SDL2-${SDL_VERSION}/include/SDL2" \
+            "QMAKE_CXXFLAGS+=-Wall -Wextra -pedantic"
+
+      - name: Build source and tests
+        run: make --jobs=2
+
+      - name: Package side-by-side executable
+        shell: bash
+        run: |
+          set -o errexit -o nounset -o pipefail
+          install_root="${RUNNER_TEMP}/pegasus-install"
+          package_dir="package/Pegasus-optimized"
+          make install "INSTALL_ROOT=${install_root}"
+
+          executable="$(find "${install_root}" -type f -name pegasus-fe.exe -print -quit)"
+          test -n "${executable}"
+
+          mkdir -p "${package_dir}" deploy
+          cp "${executable}" "${package_dir}/Pegasus_optimized.exe"
+          cp README.md LICENSE.md "${package_dir}/"
+          i686-w64-mingw32-objdump -p "${executable}" \
+            | sed -n 's/^[[:space:]]*DLL Name: /DLL: /p' \
+            | sort > "${package_dir}/DEPENDENCIES.txt"
+
+          {
+            echo "Pegasus resident-frontend test build"
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Qt: 5.15.6 static Win32"
+            echo "Place this directory directly inside the Pegasus G directory."
+            echo "Keep Pegasus_latest.exe unchanged for rollback."
+          } > "${package_dir}/BUILD.txt"
+
+          zip_name="Pegasus-optimized-win32-${GITHUB_SHA:0:8}.zip"
+          (cd package && zip -r "../deploy/${zip_name}" Pegasus-optimized)
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pegasus-optimized-win32-${{ github.run_number }}
+          path: deploy/*.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

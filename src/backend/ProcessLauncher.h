@@ -46,7 +46,6 @@ signals:
 
 public slots:
     void onLaunchRequested(const model::GameFile*);
-    void onTeardownComplete();
 
 private slots:
     void onProcessStarted();
@@ -55,6 +54,7 @@ private slots:
 
 private:
     QProcess* m_process;
+    bool m_process_started;
 
     void runProcess(const QString&, const QStringList&, const QString&);
 

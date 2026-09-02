@@ -20,6 +20,7 @@
 #include "AppSettings.h"
 #include "Log.h"
 #include "FrontendLayer.h"
+#include "Paths.h"
 #include "ProcessLauncher.h"
 #include "ScriptRunner.h"
 #include "platform/PowerCommands.h"
@@ -50,6 +51,8 @@ class FolderListModel;
 
 
 namespace {
+constexpr int FRONTEND_HIDE_DELAY_MS = 450;
+
 void print_metainfo()
 {
     Log::info(LOGMSG("Pegasus " GIT_REVISION " (" GIT_DATE ")"));
@@ -131,6 +134,8 @@ Backend::Backend()
 
 Backend::~Backend()
 {
+    m_frontend_hide_timer.stop();
+
     delete m_launcher;
     delete m_frontend;
     delete m_providerman;
@@ -149,6 +154,10 @@ Backend::Backend(const CliArgs& args)
     AppSettings::general.portable = args.portable;
 
     Log::init(args.silent);
+    const QString default_appdir = paths::ensure_appdir_env();
+    if (!default_appdir.isEmpty())
+        Log::info(LOGMSG("APPDIR was not set, using `%1`").arg(default_appdir));
+
     print_metainfo();
     register_api_classes();
 
@@ -161,18 +170,24 @@ Backend::Backend(const CliArgs& args)
     m_launcher = new ProcessLauncher();
     m_providerman = new ProviderManager();
 
-    // the following communication is required because process handling
-    // and destroying/rebuilding the frontend stack are asynchronous tasks;
-    // see the relevant classes
+    m_frontend_hide_timer.setSingleShot(true);
+    m_frontend_hide_timer.setInterval(FRONTEND_HIDE_DELAY_MS);
+    QObject::connect(&m_frontend_hide_timer, &QTimer::timeout,
+                     [this](){
+        if (m_api_public->gameRunning())
+            m_frontend->hideForGame();
+    });
 
     // the Api asks the Launcher to start the game
     QObject::connect(m_api_public, &model::ApiObject::launchGameFile,
                      m_launcher, &ProcessLauncher::onLaunchRequested);
 
-    // the Launcher tries to start the game, ask the Frontend
-    // to tear down the UI, then report back to the Api
+    // Suspend the frontend before notifying QML about the launched game.
     QObject::connect(m_launcher, &ProcessLauncher::processLaunchOk,
-                     m_api_public, &model::ApiObject::onGameLaunchOk);
+                     [this](){
+        onProcessLaunched();
+        m_api_public->onGameLaunchOk();
+    });
 
     QObject::connect(m_api_public, &model::ApiObject::gameFileLaunched,
                      m_providerman, &ProviderManager::onGameLaunched);
@@ -180,20 +195,14 @@ Backend::Backend(const CliArgs& args)
     QObject::connect(m_launcher, &ProcessLauncher::processLaunchError,
                      m_api_public, &model::ApiObject::onGameLaunchError);
 
-    QObject::connect(m_launcher, &ProcessLauncher::processLaunchOk,
-                     [this](){ onProcessLaunched(); });
-
-    QObject::connect(m_frontend, &FrontendLayer::teardownComplete,
-                     m_launcher, &ProcessLauncher::onTeardownComplete);
-
-    // when the game ends, the Launcher wakes up the Api and the Frontend
+    // Restore the frontend before notifying QML and updating play statistics.
     QObject::connect(m_launcher, &ProcessLauncher::processFinished,
-                     m_api_public, &model::ApiObject::onGameProcessFinished);
+                     [this](){
+        onProcessFinished();
+        m_api_public->onGameProcessFinished();
+    });
     QObject::connect(m_api_public, &model::ApiObject::gameFileFinished,
                      m_providerman, &ProviderManager::onGameFinished);
-
-    QObject::connect(m_launcher, &ProcessLauncher::processFinished,
-                     [this](){ onProcessFinished(); });
 
     // Setting changes
     QObject::connect(m_api_private->settings().localesPtr(), &model::Locales::localeChanged,
@@ -231,7 +240,8 @@ Backend::Backend(const CliArgs& args)
 void Backend::start()
 {
     m_api_private->settings().postInit();
-    onProcessFinished();
+    m_frontend->rebuild();
+    m_api_private->gamepad().start(m_args);
     onScanRequested();
 }
 
@@ -259,13 +269,17 @@ void Backend::onFavoritesChanged()
 
 void Backend::onProcessLaunched()
 {
-    m_frontend->teardown();
+    m_api_public->setGameRunning(true);
+    m_frontend->suspendForGame();
     m_api_private->gamepad().stop();
+    m_frontend_hide_timer.start();
 }
 
 void Backend::onProcessFinished()
 {
-    m_frontend->rebuild();
+    m_frontend_hide_timer.stop();
+    m_api_public->setGameRunning(false);
+    m_frontend->resumeFromGame();
     m_api_private->gamepad().start(m_args);
 }
 

@@ -30,8 +30,9 @@
 #endif
 
 #include <QDir>
-#include <QUrl>
 #include <QRegularExpression>
+#include <QTimer>
+#include <QUrl>
 
 
 namespace {
@@ -154,6 +155,7 @@ QString abs_workdir(const QString& workdir, const QString& base_dir, const QStri
 ProcessLauncher::ProcessLauncher(QObject* parent)
     : QObject(parent)
     , m_process(nullptr)
+    , m_process_started(false)
 {}
 
 void ProcessLauncher::onLaunchRequested(const model::GameFile* q_gamefile)
@@ -243,13 +245,15 @@ void ProcessLauncher::runProcess(const QString& command, const QStringList& args
     m_process->setInputChannelMode(QProcess::ForwardedInputChannel);
     m_process->setWorkingDirectory(workdir);
     m_process->start(command, args, QProcess::ReadOnly);
-    m_process->waitForStarted(-1);
 
 #else // Q_OS_ANDROID
     const QString result = android::run_am_call(args);
     if (result.isEmpty()) {
+        m_process_started = true;
         emit processLaunchOk();
         Log::info(LOGMSG("Activity finished"));
+        afterRun();
+        QTimer::singleShot(0, this, [this](){ emit processFinished(); });
     }
     else {
         const QString message = pretty_android_exception(result).arg(result);
@@ -261,18 +265,10 @@ void ProcessLauncher::runProcess(const QString& command, const QStringList& args
 #endif // Q_OS_ANDROID
 }
 
-void ProcessLauncher::onTeardownComplete()
-{
-#ifndef Q_OS_ANDROID
-    Q_ASSERT(m_process);
-    m_process->waitForFinished(-1);
-#endif
-    emit processFinished();
-}
-
 void ProcessLauncher::onProcessStarted()
 {
     Q_ASSERT(m_process);
+    m_process_started = true;
     Log::info(LOGMSG("Process %1 started").arg(m_process->processId()));
     Log::info(SEPARATOR);
     emit processLaunchOk();
@@ -284,17 +280,13 @@ void ProcessLauncher::onProcessError(QProcess::ProcessError error)
 
     const QString message = processerror_to_string(error).arg(m_process->program());
 
-    switch (m_process->state()) {
-        case QProcess::Starting:
-        case QProcess::NotRunning:
-            emit processLaunchError(message);
-            Log::warning(message);
-            afterRun(); // finished() won't run
-            break;
-
-        case QProcess::Running:
-            emit processRuntimeError(message);
-            break;
+    if (!m_process_started) {
+        emit processLaunchError(message);
+        Log::warning(message);
+        afterRun(); // finished() won't run after a failed start
+    }
+    else {
+        emit processRuntimeError(message);
     }
 }
 
@@ -316,6 +308,7 @@ void ProcessLauncher::onProcessFinished(int exitcode, QProcess::ExitStatus exits
     }
 
     afterRun();
+    emit processFinished();
 }
 
 void ProcessLauncher::beforeRun(const QString& game_path)
@@ -331,6 +324,7 @@ void ProcessLauncher::afterRun()
     m_process->deleteLater();
     m_process = nullptr;
 #endif
+    m_process_started = false;
 
     ScriptRunner::run(ScriptEvent::PROCESS_FINISHED);
     TerminalKbd::disable();

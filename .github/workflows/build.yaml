@@ -1,4 +1,9 @@
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches-ignore:
+      - lwj/windows-resident-frontend
+  pull_request:
+  workflow_dispatch:
 
 env:
   TOOLS_URL: https://github.com/mmatyas/pegasus-frontend/releases/download/alpha1

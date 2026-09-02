@@ -1,6 +1,9 @@
 # ignore build dir
 build*/
 
+# local Windows integration package (large, never part of the source tree)
+/windows/
+
 # ignore all dotfiles
 .*
 
