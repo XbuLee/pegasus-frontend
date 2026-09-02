@@ -61,6 +61,11 @@ void print_metainfo()
         QSysInfo::currentCpuArchitecture(),
         QGuiApplication::platformName()));
     Log::info(LOGMSG("Qt version %1").arg(qVersion()));
+#ifdef Q_OS_WINDOWS
+    Log::info(LOGMSG("Qt graphics backend requested: `%1` (`%2`)").arg(
+        QString::fromLocal8Bit(qgetenv("QT_OPENGL")),
+        QString::fromLocal8Bit(qgetenv("QT_ANGLE_PLATFORM"))));
+#endif
 }
 
 void register_api_classes()

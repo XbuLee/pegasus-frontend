@@ -97,7 +97,9 @@ jobs:
             echo "Keep Pegasus_latest.exe unchanged for rollback."
             echo "Settings: %LOCALAPPDATA%\\pegasus-frontend\\settings.txt"
             echo "Borderless mode: general.window-mode: borderless"
-            echo "This build does not change the Windows HDR setting."
+            echo "Windows rendering defaults to ANGLE/D3D11 to preserve desktop HDR."
+            echo "Set QT_OPENGL=desktop before launch to restore the old renderer."
+            echo "This build never enables or disables the Windows HDR setting."
           } > "${package_dir}/BUILD.txt"
 
           zip_name="Pegasus-optimized-win32-${GITHUB_SHA:0:8}.zip"

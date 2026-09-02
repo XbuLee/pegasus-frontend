@@ -40,6 +40,21 @@ backend::CliArgs handle_cli_args(QGuiApplication&);
 bool request_runtime_permissions();
 bool portable_txt_present();
 
+void configure_graphics_backend()
+{
+#ifdef Q_OS_WINDOWS
+    // Desktop OpenGL may take the direct fullscreen presentation path and
+    // temporarily drop an HDR Windows desktop back to SDR. ANGLE/D3D11 keeps
+    // this SDR UI in the desktop compositor, which preserves the system mode.
+    if (!qEnvironmentVariableIsSet("QT_OPENGL")) {
+        qputenv("QT_OPENGL", "angle");
+        QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
+    }
+    if (!qEnvironmentVariableIsSet("QT_ANGLE_PLATFORM"))
+        qputenv("QT_ANGLE_PLATFORM", "d3d11");
+#endif
+}
+
 int main(int argc, char *argv[])
 {
     Q_INIT_RESOURCE(frontend);
@@ -54,6 +69,7 @@ int main(int argc, char *argv[])
 #endif
 
     TerminalKbd::on_startup();
+    configure_graphics_backend();
 
     QCoreApplication::addLibraryPath(QStringLiteral("lib/plugins"));
     QCoreApplication::addLibraryPath(QStringLiteral("lib"));
