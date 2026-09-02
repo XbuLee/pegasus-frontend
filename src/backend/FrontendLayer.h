@@ -19,7 +19,6 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QVariant>
 #include <QVector>
 
 class QQmlApplicationEngine;
@@ -44,13 +43,6 @@ signals:
     void rebuildComplete();
 
 private:
-    struct MediaState {
-        QPointer<QObject> object;
-        QVariant muted;
-        bool restore_muted = false;
-        bool resume_playback = false;
-    };
-
     struct WindowState {
         QPointer<QWindow> window;
         int visibility = 0;
@@ -60,14 +52,10 @@ private:
     QObject* const m_api_public;
     QObject* const m_api_private;
     QQmlApplicationEngine* m_engine;
-    QVector<MediaState> m_media_states;
     QVector<WindowState> m_window_states;
     bool m_suspended;
     bool m_windows_hidden;
 
-    void suspendMedia();
-    void restoreMedia();
-    void updateMediaForApplicationFocus();
     void snapshotWindows();
     void restoreWindows();
     void requestWindowActivation(QWindow*);

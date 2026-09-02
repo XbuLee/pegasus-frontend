@@ -178,11 +178,14 @@ Backend::Backend(const CliArgs& args)
             m_frontend->hideForGame();
     });
 
-    // the Api asks the Launcher to start the game
+    // Capture the active frontend window before the child process can take focus.
     QObject::connect(m_api_public, &model::ApiObject::launchGameFile,
-                     m_launcher, &ProcessLauncher::onLaunchRequested);
+                     [this](const model::GameFile* const game_file){
+        m_frontend->suspendForGame();
+        m_launcher->onLaunchRequested(game_file);
+    });
 
-    // Suspend the frontend before notifying QML about the launched game.
+    // Mark the game active before notifying QML about the successful launch.
     QObject::connect(m_launcher, &ProcessLauncher::processLaunchOk,
                      [this](){
         onProcessLaunched();
@@ -193,7 +196,10 @@ Backend::Backend(const CliArgs& args)
                      m_providerman, &ProviderManager::onGameLaunched);
 
     QObject::connect(m_launcher, &ProcessLauncher::processLaunchError,
-                     m_api_public, &model::ApiObject::onGameLaunchError);
+                     [this](const QString& message){
+        m_frontend->resumeFromGame();
+        m_api_public->onGameLaunchError(message);
+    });
 
     // Restore the frontend before notifying QML and updating play statistics.
     QObject::connect(m_launcher, &ProcessLauncher::processFinished,
@@ -270,7 +276,6 @@ void Backend::onFavoritesChanged()
 void Backend::onProcessLaunched()
 {
     m_api_public->setGameRunning(true);
-    m_frontend->suspendForGame();
     m_api_private->gamepad().stop();
     m_frontend_hide_timer.start();
 }

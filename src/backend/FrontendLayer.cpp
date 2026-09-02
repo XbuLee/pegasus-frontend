@@ -31,11 +31,9 @@
 #include <QQmlNetworkAccessManagerFactory>
 #include <QQuickWindow>
 #include <QGuiApplication>
-#include <QMetaProperty>
 #include <QTimer>
 #include <QWindow>
 
-#include <algorithm>
 #include <array>
 
 #ifdef Q_OS_WINDOWS
@@ -59,11 +57,6 @@ public:
 QNetworkAccessManager* DiskCachedNAMFactory::create(QObject* parent)
 {
     return utils::create_disc_cached_nam(parent);
-}
-
-bool has_method(const QObject* const object, const char* const signature)
-{
-    return object->metaObject()->indexOfMethod(signature) >= 0;
 }
 
 void activate_window(QWindow* const window)
@@ -110,10 +103,6 @@ FrontendLayer::FrontendLayer(QObject* const api_public, QObject* const api_priva
     , m_windows_hidden(false)
 {
     // Note: the pointer to the Api is non-owning and constant during the runtime
-    QObject::connect(qGuiApp, &QGuiApplication::applicationStateChanged,
-                     this, [this](Qt::ApplicationState){ updateMediaForApplicationFocus(); });
-    QObject::connect(qGuiApp, &QGuiApplication::focusWindowChanged,
-                     this, [this](QWindow*){ updateMediaForApplicationFocus(); });
 }
 
 void FrontendLayer::rebuild()
@@ -134,7 +123,6 @@ void FrontendLayer::rebuild()
     m_engine->rootContext()->setContextProperty(QStringLiteral("Api"), m_api_public);
     m_engine->rootContext()->setContextProperty(QStringLiteral("Internal"), m_api_private);
     m_engine->load(QUrl(QStringLiteral("qrc:/frontend/main.qml")));
-    updateMediaForApplicationFocus();
 
     emit rebuildComplete();
 }
@@ -148,8 +136,7 @@ void FrontendLayer::suspendForGame()
 
     m_suspended = true;
     snapshotWindows();
-    suspendMedia();
-    Log::info(LOGMSG("Frontend suspended for external game"));
+    Log::info(LOGMSG("Frontend prepared for external game"));
 }
 
 void FrontendLayer::hideForGame()
@@ -157,7 +144,6 @@ void FrontendLayer::hideForGame()
     if (!m_suspended || m_windows_hidden)
         return;
 
-    suspendMedia();
     for (const WindowState& state : qAsConst(m_window_states)) {
         if (state.window)
             state.window->hide();
@@ -173,106 +159,7 @@ void FrontendLayer::resumeFromGame()
 
     m_suspended = false;
     restoreWindows();
-    updateMediaForApplicationFocus();
     Log::info(LOGMSG("Frontend resumed after external game"));
-}
-
-void FrontendLayer::suspendMedia()
-{
-    Q_ASSERT(m_engine);
-
-    QList<QPointer<QObject>> objects;
-    for (QObject* const root : m_engine->rootObjects()) {
-        objects.append(root);
-        for (QObject* const child : root->findChildren<QObject*>())
-            objects.append(child);
-    }
-
-    for (const QPointer<QObject>& object_guard : qAsConst(objects)) {
-        QObject* const object = object_guard.data();
-        if (!object)
-            continue;
-
-        auto state_it = std::find_if(
-            m_media_states.begin(),
-            m_media_states.end(),
-            [object](const MediaState& state){ return state.object == object; });
-
-        const bool already_tracked = state_it != m_media_states.end();
-        MediaState state;
-        MediaState& active_state = already_tracked ? *state_it : state;
-        active_state.object = object;
-
-        const QMetaObject* const meta = object->metaObject();
-        const int muted_idx = meta->indexOfProperty("muted");
-        if (muted_idx >= 0) {
-            const QMetaProperty muted_prop = meta->property(muted_idx);
-            if (muted_prop.isReadable() && muted_prop.isWritable()) {
-                if (!already_tracked) {
-                    active_state.muted = muted_prop.read(object);
-                    active_state.restore_muted = active_state.muted.isValid();
-                }
-                if (active_state.restore_muted)
-                    muted_prop.write(object, true);
-            }
-        }
-
-        QObject* const live_object = active_state.object.data();
-        if (!live_object)
-            continue;
-
-        const QVariant playback_state = live_object->property("playbackState");
-        const bool can_pause = has_method(live_object, "pause()")
-            && has_method(live_object, "play()");
-        if (!active_state.resume_playback
-            && playback_state.isValid()
-            && playback_state.toInt() == 1
-            && can_pause)
-        {
-            active_state.resume_playback = QMetaObject::invokeMethod(
-                live_object,
-                "pause",
-                Qt::DirectConnection);
-        }
-
-        if (!already_tracked
-            && state.object
-            && (state.restore_muted || state.resume_playback))
-        {
-            m_media_states.append(std::move(state));
-        }
-    }
-}
-
-void FrontendLayer::restoreMedia()
-{
-    for (const MediaState& state : qAsConst(m_media_states)) {
-        if (!state.object)
-            continue;
-
-        QObject* object = state.object.data();
-        if (state.restore_muted)
-            object->setProperty("muted", state.muted);
-
-        object = state.object.data();
-        if (object && state.resume_playback)
-            QMetaObject::invokeMethod(object, "play", Qt::DirectConnection);
-    }
-    m_media_states.clear();
-}
-
-void FrontendLayer::updateMediaForApplicationFocus()
-{
-    if (!m_engine)
-        return;
-
-    const bool frontend_focused =
-        QGuiApplication::applicationState() == Qt::ApplicationActive
-        && QGuiApplication::focusWindow();
-    if (frontend_focused && !m_suspended)
-        restoreMedia();
-    else
-        suspendMedia();
 }
 
 void FrontendLayer::snapshotWindows()
