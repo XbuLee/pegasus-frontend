@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
@@ -52,7 +52,12 @@ jobs:
       - name: Configure
         shell: bash
         run: |
-          "/opt/${QT_NAME}/bin/qmake" . \
+          qt_dir="/opt/${QT_NAME}_hosttools"
+          if [[ ! -d "${qt_dir}" ]]; then
+            qt_dir="/opt/${QT_NAME}"
+          fi
+
+          "${qt_dir}/bin/qmake" . \
             ENABLE_APNG=1 \
             USE_SDL_GAMEPAD=1 \
             USE_SDL_POWER=1 \
